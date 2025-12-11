@@ -5,7 +5,7 @@ import math
 # ==========================================
 # 1. CONFIGURATION (CRUCIAL TUNING AREA)
 # ==========================================
-VIDEO_PATH = 'big_corr_1.mp4'  
+VIDEO_PATH = 'BIP_videos_roboter_cam/big_corr_1.mp4'  
 ROI_START_Y = 0.40          # Mask out top 40% of the frame
 MIN_AREA = 100              # Minimum area for a strip segment
 

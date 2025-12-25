@@ -101,48 +101,50 @@ def detect_and_draw_lines(img_frame):
     # Collect the two best candidates
     selected_strips = [c for c in [left_best, right_best] if c is not None]
     #valid_candidates = sorted(valid_candidates, key=cv2.contourArea, reverse=True)[:2]
+    
+    offset_error = 0
+    path_center_x = mid_x
+    # Define a 'slight' error value (e.g., 30 pixels for a 224px wide image)
+    # This prevents aggressive over-correction
+    SLIGHT_STEER = int(mid_x * 0.15)
 
-    all_poly_coeffs = []
+    # Case A: Both lines detected (Normal steering)
+    if left_best is not None and right_best is not None:
+        M_left = cv2.moments(left_best)
+        M_right = cv2.moments(right_best)
+        cx_l = int(M_left["m10"] / M_left["m00"])
+        cx_r = int(M_right["m10"] / M_right["m00"])
+        path_center_x = (cx_l + cx_r) // 2
+        offset_error = path_center_x - mid_x
+        
+        #cv2.circle(contour_vis_roi, (path_center_x, 20), 5, (0, 255, 0), -1)
+
+    # Case B: Only LEFT line detected (Slightly Move Right)
+    elif left_best is not None:
+        offset_error = SLIGHT_STEER
+        path_center_x = offset_error + mid_x
+        cv2.putText(contour_vis_roi, "SLIGHT RIGHT", (10, 20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+
+    # Case C: Only RIGHT line detected (Slightly Move Left)
+    elif right_best is not None:
+        offset_error = -SLIGHT_STEER
+        path_center_x = offset_error + mid_x
+        cv2.putText(contour_vis_roi, "SLIGHT LEFT", (10, 20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+
     
+    # Red circle at path center
+    cv2.circle(contour_vis_roi, (path_center_x, roi.shape[0]//2), 5, (0, 0, 255), -1)
+    # Blue line representing the error
+    cv2.line(contour_vis_roi, (mid_x, roi.shape[0]//2), (path_center_x, roi.shape[0]//2), (255, 0, 0), 2)
+
     for contour in selected_strips:
-        
-        pts = contour.reshape(-1, 2)
-        try:
-            coeffs = np.polyfit(pts[:, 1], pts[:, 0], 2)
-            all_poly_coeffs.append(coeffs)
-            
-            # Draw individual detected strips in Green
             cv2.drawContours(contour_vis_roi, [contour], -1, (0, 255, 0), 2)
-        except:
-            continue
-    
-    # 5. CALCULATE CENTER PATH
-    if len(all_poly_coeffs) == 2:
-        # Average the coefficients of the two lines to get the center polynomial
-        center_coeffs = (all_poly_coeffs[0] + all_poly_coeffs[1]) / 2
-        
-        # Generate points for the center line
-        plot_y = np.linspace(0, roi.shape[0] - 1, 30)
-        plot_x_center = np.polyval(center_coeffs, plot_y)
-        
-        # Draw the target center path in Red
-        center_pts = np.array([np.transpose(np.vstack([plot_x_center, plot_y]))], np.int32)
-        cv2.polylines(contour_vis_roi, center_pts, isClosed=False, color=(0, 0, 255), thickness=4)
-        
-        # --- STEERING LOGIC ---
-        # Calculate the center of the image at the bottom of ROI
-        image_center_x = width // 2
-        # Target x at the very bottom (y = max)
-        target_x = np.polyval(center_coeffs, roi.shape[0] - 1)
-        # Offset (Error) for your robot's PID controller
-        offset_error = target_x - image_center_x
-        
-        #cv2.putText(contour_vis_roi, f"Error: {int(offset_error)}px", (10, 30), 
-                    #cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     img_frame[roi_start_y:height, 0:width] = contour_vis_roi
     
-    return img_frame
+    return selected_strips, img_frame, offset_error
                 
 
 # (End of line_detector.py)

@@ -51,6 +51,10 @@ transform = transforms.Compose([
 
 cap = cv2.VideoCapture('../BIP_videos_roboter_cam/big_corr_w_sun_w_obs_1.mp4')
 
+total_frames = 0
+start_time = time.time()
+
+
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret: break
@@ -79,7 +83,16 @@ while cap.isOpened():
 
     time.sleep(0.04)
     cv2.imshow("Steering Model Test", frame)
+    total_frames += 1
     if cv2.waitKey(1) & 0xFF == ord('q'): break
+
+end_time = time.time()
+total_time = end_time - start_time
+
+if total_time > 0:
+        avg_fps = total_frames / total_time
+
+print(avg_fps)
 
 cap.release()
 cv2.destroyAllWindows()

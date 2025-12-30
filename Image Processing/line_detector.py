@@ -72,11 +72,12 @@ def detect_and_draw_lines(img_frame):
     for contour in contours:
         area = cv2.contourArea(contour)
         perimeter = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
 
         if area > MIN_AREA and perimeter > 0:
             # Check 1: Circularity (must be low for a long line)
             circularity = 4 * np.pi * area / (perimeter**2)
-            if circularity < MAX_CIRCULARITY:
+            if circularity < MAX_CIRCULARITY and len(approx) < 10:
                 
                 M = cv2.moments(contour)
                 if M["m00"] != 0:

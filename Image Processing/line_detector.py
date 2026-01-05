@@ -5,6 +5,33 @@
 
 import cv2
 import numpy as np
+import math
+
+def cal_angle(M):
+
+    angle = None
+    if M['m00'] != 0:
+        # Calculate orientation using second-order central moments
+        mu20 = M['mu20'] / M['m00']
+        mu02 = M['mu02'] / M['m00']
+        mu11 = M['mu11'] / M['m00']
+    
+        # Formula for orientation angle in radians
+        angle_rad = 0.5 * math.atan2(2 * mu11, mu20 - mu02)
+        angle = math.degrees(angle_rad)
+
+    return angle
+
+def get_vertical_extremes(cnt):
+    # cnt[:, :, 1] accesses all Y-coordinates in the contour
+    top_idx = cnt[:, :, 1].argmin()
+    bot_idx = cnt[:, :, 1].argmax()
+    
+    # Extract the (x, y) tuples
+    top_x, top_y = cnt[top_idx][0]
+    bot_x, bot_y = cnt[bot_idx][0]
+    
+    return int(top_x), int(bot_x)
 
 def detect_and_draw_lines(img_frame):
     """
@@ -48,104 +75,133 @@ def detect_and_draw_lines(img_frame):
     kernel_small = np.ones((1, 2), np.uint8) 
     kernel_large = np.ones((2, 3), np.uint8) 
 
+    #mask_thickened = cv2.dilate(adaptive_mask, kernel_large, iterations=1)
+    
     # 5.a. Opening (Noise Removal): Clean up small isolated noise.
-    cleaned_mask = cv2.morphologyEx(adaptive_mask, cv2.MORPH_OPEN, kernel_small, iterations=1)
+    cleaned_mask = cv2.morphologyEx(adaptive_mask, cv2.MORPH_OPEN, kernel_small, iterations=2)
 
     # 5.b. Dilation (Thickening): Ensure thin lines are robust.
-    mask_thickened = cv2.dilate(cleaned_mask, kernel_large, iterations=2) 
+    mask_thickened = cv2.dilate(cleaned_mask, kernel_large, iterations=1) 
 
     # 5.c. Closing (Final Connection): Ensure the strip is contiguous.
     final_binary_output = cv2.morphologyEx(mask_thickened, cv2.MORPH_CLOSE, kernel_large, iterations=1)
     
     # --- 6. CONTOUR FINDING AND FILTERING (Area, Circularity) ---
-    
     contours, _ = cv2.findContours(final_binary_output, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     left_best = None
     right_best = None
+    unassigned = None
     min_dist_left = float('inf')
     min_dist_right = float('inf')
     # Your working filter constants
     MIN_AREA = 190
-    MAX_CIRCULARITY = 0.33 #0.33
+    MAX_CIRCULARITY = 0.45 #0.33
+    r_top_x = 0
+    r_bot_x = 0
+    l_bot_x = 0
+    l_top_x = 0
+    visible_l = 0
+    visible_r = 0
+    angle = 0
 
     for contour in contours:
         area = cv2.contourArea(contour)
         perimeter = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
-
-        if area > MIN_AREA and perimeter > 0:
+        
+        if area > MIN_AREA and perimeter > 0 :
+ 
             # Check 1: Circularity (must be low for a long line)
             circularity = 4 * np.pi * area / (perimeter**2)
+            approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
+
             if circularity < MAX_CIRCULARITY and len(approx) < 10:
                 
                 M = cv2.moments(contour)
-                if M["m00"] != 0:
+
+                if M['m00'] != 0:
+                    # Calculate orientation using second-order central moments
+                    angle = cal_angle(M)
+
                     cx = int(M["m10"] / M["m00"])
                     cy = int(M["m01"] / M["m00"])
                     
                     # Calculate distance to the center line
                     dist_to_center = abs(mid_x - cx)
                     
+                    if -7 < angle < 7:
+                        unassigned = contour
+
                     # Selection Logic: Nearest to center on the LEFT
-                    if cx < mid_x:
+                    elif cx < mid_x:
                         if dist_to_center < min_dist_left:
                             min_dist_left = dist_to_center
+                            #-ve angle value
                             left_best = contour
                     
                     # Selection Logic: Nearest to center on the RIGHT
                     else:
                         if dist_to_center < min_dist_right:
                             min_dist_right = dist_to_center
+                             #+ve angle value
                             right_best = contour
 
+    
+    if unassigned is not None:
+        unassigned_perimeter = cv2.arcLength(unassigned, True)
+        unassigned_area = cv2.contourArea(unassigned)
+        cir = 4 * np.pi * unassigned_area / (unassigned_perimeter**2)
+        if 250 < unassigned_area < 400 and cir < 0.11:
+            if left_best is not None and right_best is None:
+                left_best = np.vstack((left_best, unassigned))
+                print('Unassigned')
+            elif right_best is not None and left_best is None:
+                right_best = np.vstack((right_best, unassigned))
+                print('Unassigned')
+        elif right_best is None and left_best is None:
+            M = cv2.moments(unassigned)
+            angle = cal_angle(M)
+            if angle < 0 :
+                left_best = unassigned
+            else :
+                right_best = unassigned
+
+                
+
+    if right_best is None or left_best is None:
+        if left_best is not None:
+            M = cv2.moments(left_best)
+            angle = cal_angle(M)
+            if angle > 0:
+                right_best = left_best
+                left_best = None
+        elif right_best is not None:
+            M = cv2.moments(right_best)
+            angle = cal_angle(M)
+            if angle < 0:
+                left_best = right_best
+                right_best = None
+
+
     # Collect the two best candidates
-    selected_strips = [c for c in [left_best, right_best] if c is not None]
-    #valid_candidates = sorted(valid_candidates, key=cv2.contourArea, reverse=True)[:2]
+    cv2.drawContours(contour_vis_roi, [left_best], -1, (0, 0, 255), 2) #red
+    cv2.drawContours(contour_vis_roi, [right_best], -1, (255, 255, 255), 2) #white
     
-    offset_error = 0
-    path_center_x = mid_x
-    # Define a 'slight' error value (e.g., 30 pixels for a 224px wide image)
-    # This prevents aggressive over-correction
-    SLIGHT_STEER = int(mid_x * 0.15)
 
-    # Case A: Both lines detected (Normal steering)
-    if left_best is not None and right_best is not None:
-        M_left = cv2.moments(left_best)
-        M_right = cv2.moments(right_best)
-        cx_l = int(M_left["m10"] / M_left["m00"])
-        cx_r = int(M_right["m10"] / M_right["m00"])
-        path_center_x = (cx_l + cx_r) // 2
-        offset_error = path_center_x - mid_x
-        
-        #cv2.circle(contour_vis_roi, (path_center_x, 20), 5, (0, 255, 0), -1)
+    # Case A: Left case
+    if left_best is not None:
+        l_top_x, l_bot_x = get_vertical_extremes(left_best)
+        visible_l = 1
 
-    # Case B: Only LEFT line detected (Slightly Move Right)
-    elif left_best is not None:
-        offset_error = SLIGHT_STEER
-        path_center_x = offset_error + mid_x
-        cv2.putText(contour_vis_roi, "SLIGHT RIGHT", (10, 20), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
-
-    # Case C: Only RIGHT line detected (Slightly Move Left)
-    elif right_best is not None:
-        offset_error = -SLIGHT_STEER
-        path_center_x = offset_error + mid_x
-        cv2.putText(contour_vis_roi, "SLIGHT LEFT", (10, 20), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
-
-    
-    # Red circle at path center
-    cv2.circle(contour_vis_roi, (path_center_x, roi.shape[0]//2), 5, (0, 0, 255), -1)
-    # Blue line representing the error
-    cv2.line(contour_vis_roi, (mid_x, roi.shape[0]//2), (path_center_x, roi.shape[0]//2), (255, 0, 0), 2)
-
-    for contour in selected_strips:
-            cv2.drawContours(contour_vis_roi, [contour], -1, (0, 255, 0), 2)
+    # Case B: Right case
+    if right_best is not None:
+        r_top_x, r_bot_x = get_vertical_extremes(right_best)
+        visible_r = 1
 
     img_frame[roi_start_y:height, 0:width] = contour_vis_roi
     
-    return selected_strips, img_frame, offset_error
+    
+    return l_top_x, l_bot_x, r_top_x, r_bot_x, visible_l, visible_r
                 
 
 # (End of line_detector.py)

@@ -6,9 +6,9 @@ from line_detector import detect_and_draw_lines
 
 # 1. Configuration
 MODEL_PATH = "C:/Users/srira/Documents/BIP_Repo/Jetbot-BIP/Image Processing/ONNX/ssd-mobilenet.onnx"
-VIDEO_PATH = "big_corr_1.mp4"  # Change this to 0 for Webcam
+VIDEO_PATH = "small_corr_1.mp4"  # Change this to 0 for Webcam
 LABELS = ["BACKGROUND", "steelball", "pipe"] 
-CONF_THRESHOLD = 0.3
+CONF_THRESHOLD = 0.4
 NMS_THRESHOLD = 0.4
 
 # 2. Load Model
@@ -33,8 +33,6 @@ while True:
 
     h, w, _ = frame.shape
     loop_start = time.time()
-
-    _,frame,_ = detect_and_draw_lines(frame)
 
     # --- Preprocessing ---
     input_img = cv2.resize(frame, (300, 300))
@@ -86,6 +84,8 @@ while True:
     cv2.putText(frame, f"FPS: {current_fps:.1f}", (20, 40), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
 
+    _,_,_,_,_,_ = detect_and_draw_lines(frame)
+    time.sleep(0.07)
     cv2.imshow("SSD-Mobilenet Video Test", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):

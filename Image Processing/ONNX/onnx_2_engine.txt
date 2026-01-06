@@ -5,3 +5,18 @@
   --fp16 \
   --workspace=1024 \
   --explicitBatch
+
+
+/usr/src/tensorrt/bin/trtexec \
+  --onnx=strip_detector_updated.onnx \
+  --saveEngine=strip_detector_updated.engine \
+  --fp16 \
+  --explicitBatch
+
+
+/usr/src/tensorrt/bin/trtexec \
+  --onnx=strip_detector_nano.onnx \
+  --saveEngine=strip_detector_nano.engine \
+  --explicitBatch \
+  --fp16 \
+  --workspace=512

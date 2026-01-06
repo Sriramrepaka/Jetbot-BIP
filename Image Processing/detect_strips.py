@@ -1,33 +1,36 @@
 import jetson_inference
 import jetson_utils
 
-# 1. Load the optimized engine
-# The 'segNet' class is specifically for semantic segmentation
+# Initialize the segNet object
+# We point it to your custom ONNX file and define the input/output names used in the export
 net = jetson_inference.segNet(argv=[
-    '--model=ONNX/strip_detector_new.engine', 
-    '--labels=ONNX/classes.txt',       # Create this file with 'background' and 'strip'
-    '--input-blob=input', 
-    '--output-blob=output'
+    f"--model=ONNX/strip_detector_nano.engine",  # Point to the .engine instead of .onnx
+    f"--labels=ONNX/classes.txt",
+    f"--colors=colors.txt",
+    f"--input-blob=input_0",
+    f"--output-blob=output_0"
 ])
 
-# 2. Setup the Camera and Display
-# Using jetson_utils for high-performance memory management
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_1.mp4")  # Change to "/dev/video0" for USB
+# Setup video source (CSI camera or video file)
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/u_corr.mp4") 
 display = jetson_utils.videoOutput("display://0")
 
 while display.IsStreaming():
-    # Capture frame from camera
-    img = camera.Capture()
+    # 1. Capture the image
+    img_full = camera.Capture()
 
-    # Run inference (Segmentation)
-    # This automatically resizes the camera frame to 112x224
-    net.Process(img)
+    crop_roi = (0, 112, 224, 224)
 
-    # Apply the mask over the original image
-    net.Overlay(img, filter_mode='linear')
-
-    # Render to the monitor
-    display.Render(img)
-
-    # Print performance data to the window title
-    display.SetStatus(f"Model FPS: {net.GetNetworkFPS():.1f}")
+    img_cropped = jetson_utils.cudaAllocMapped(width=224, height=112, format=img_full.format)
+    jetson_utils.cudaCrop(img_full, img_cropped, crop_roi)
+    
+    # 2. Process Segmentation
+    # Note: segNet will automatically handle the resizing and normalization
+    net.Process(img_cropped)
+    
+    # 3. Overlay the segmentation mask
+    net.Overlay(img_cropped, width=img.width, height=img.height, filter_mode="linear")
+    
+    # 4. Render the results
+    display.Render(img_cropped)
+    display.SetStatus(f"segNet | {net.GetNetworkFPS():.1f} FPS")

@@ -1,76 +1,82 @@
 import cv2
 import numpy as np
-import tensorrt as trt
-import jetson.utils  # This replaces PyCUDA for memory management
+import onnxruntime as ort
+import jetson_utils as jetson
 import time
 
-# --- TENSORRT SETUP ---
-TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+# 1. Load ONNX Model with CUDA Provider
+# This allows the ONNX model to run on the Nano's GPU
+providers = [
+    ('CUDAExecutionProvider', {
+        'device_id': 0,
+        'arena_extend_strategy': 'kSameAsRequested',
+        'gpu_mem_limit': 2 * 1024 * 1024 * 1024, # Limit to 2GB
+        'cudnn_conv_algo_search': 'DEFAULT',
+        'do_copy_in_default_stream': True,
+    }),
+    'CPUExecutionProvider',
+]
 
-def load_engine(engine_path):
-    with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
-        return runtime.deserialize_cuda_engine(f.read())
+session = ort.InferenceSession("ONNX/strip_detector.onnx", providers=providers)
+input_name = session.get_inputs()[0].name
 
-engine_path = "ONNX/strip_detector.engine"
-engine = load_engine(engine_path)
-context = engine.create_execution_context()
+# 2. Initialize Camera (jetson.utils is faster than cv2.VideoCapture)
+# Using 224x224 input
+camera = jetson.utils.videoSource("BIP_videos_roboter_cam/u_corr_2.mp4") # Use "/dev/video0" for USB
 
-# Allocate CUDA memory using jetson.utils
-# Model input: 1x3x112x224
-input_size = (1, 3, 112, 224)
-output_size = (1, 1, 112, 224) # Adjust based on your model output shape
+# Timing for FPS
+prev_time = 0
 
-# jetson.utils.cudaAllocMapped is "Zero-Copy" memory
-input_mem = jetson.utils.cudaAllocMapped(width=224, height=112, format='rgb32f')
-output_mem = jetson.utils.cudaAllocMapped(width=224, height=112, format='gray32f')
-
-# Get pointers for TensorRT
-bindings = [int(input_mem.ptr), int(output_mem.ptr)]
-
-cap = cv2.VideoCapture("../BIP_videos_roboter_cam/u_corr_no_obs_shaky.mp4")
-#cap.set(cv2.CAP_PROP_FRAME_WIDTH, 224)
-#cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 224)
+print("Starting Segmentation (ONNX + jetson_utils)...")
 
 while True:
-    ret, frame = cap.read()
-    if not ret: break
-    
+    # Capture image (returns a jetson.utils.cudaImage)
+    img = camera.Capture()
+    if img is None: continue
+
     start_time = time.time()
 
-    # 1. Pre-process (Crop)
-    roi = frame[112:224, 0:224]
-    rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    # 3. Bottom Half Crop & Pre-processing
+    # jetson_utils.cudaCrop is much faster than numpy cropping
+    # Crop: (left, top, right, bottom)
+    crop_roi = (0, 112, 224, 224) 
+    img_cropped = jetson.utils.cudaAllocMapped(width=224, height=112, format=img.format)
+    jetson.utils.cudaCrop(img, img_cropped, crop_roi)
+
+    # Convert to Numpy for ONNX Runtime (Standard normalization)
+    # We use cudaToNumpy which is a zero-copy operation on Jetson
+    array = jetson.utils.cudaToNumpy(img_cropped)
     
-    # 2. Copy to CUDA memory
-    # jetson.utils allows direct conversion from numpy
-    cuda_img = jetson.utils.cudaFromNumpy(rgb)
-    jetson.utils.cudaConvertColor(cuda_img, input_mem)
+    # Pre-process: Resize if needed, Normalize, and Transpose (HWC -> CHW)
+    img_input = array.astype(np.float32) / 255.0
+    img_input = np.transpose(img_input, (2, 0, 1))
+    img_input = np.expand_dims(img_input, axis=0)
 
-    # 3. Inference
-    context.execute_v2(bindings=bindings)
+    # 4. Inference
+    outputs = session.run(None, {input_name: img_input})
+    mask = outputs[0][0][0] # Get the 2D prediction map
 
-    # 4. Post-process
-    # Pull the result back from GPU memory to Numpy
-    mask_np = jetson.utils.cudaToNumpy(output_mem)
-    mask = (mask_np > 0.5).astype(np.uint8) * 255
+    # 5. Post-process & Over-approximation
+    mask = (mask > 0.5).astype(np.uint8) * 255
+    kernel = np.ones((5,5), np.uint8)
+    mask = cv2.dilate(mask, kernel, iterations=1)
 
-    hsv_min = np.array([0,75,185])
-    hsv_max = np.array([180,140,250])
+    # 6. FPS Calculation
+    curr_time = time.time()
+    fps = 1 / (curr_time - start_time)
     
-    hsv_full = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask_hsv = cv2.inRange(hsv_full, hsv_min, hsv_max)
-
-    mask = cv2.bitwise_or(mask,mask_hsv)
+    # Display results
+    # Convert back to BGR for OpenCV display
+    display_frame = jetson.utils.cudaToNumpy(img)
+    display_frame = cv2.cvtColor(display_frame, cv2.COLOR_RGB2BGR)
     
-    # Dilation
-    mask = cv2.dilate(mask, np.ones((5,5), np.uint8))
-
-    fps = 1.0 / (time.time() - start_time)
-    cv2.putText(frame, "FPS: {:.2f}".format(fps), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    cv2.putText(display_frame, f"FPS: {fps:.2f}", (10, 30), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
     
-    cv2.imshow("Detection", frame)
-    cv2.imshow("Mask", mask)
+    cv2.imshow("Nano Camera", display_frame)
+    cv2.imshow("Strip Mask", mask)
 
-    if cv2.waitKey(1) == ord('q'): break
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-cap.release()
+cv2.destroyAllWindows()

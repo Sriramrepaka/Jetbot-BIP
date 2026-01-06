@@ -1,0 +1,7 @@
+# Locate trtexec (usually in this path on JetPack 4.4)
+/usr/src/tensorrt/bin/trtexec \
+  --onnx=strip_detector.onnx \
+  --saveEngine=strip_detector.engine \
+  --fp16 \
+  --workspace=1024 \
+  --explicitBatch

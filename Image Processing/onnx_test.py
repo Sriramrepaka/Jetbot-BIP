@@ -6,7 +6,7 @@ from line_detector import detect_and_draw_lines
 
 # 1. Configuration
 MODEL_PATH = "C:/Users/srira/Documents/BIP_Repo/Jetbot-BIP/Image Processing/ONNX/ssd-mobilenet.onnx"
-VIDEO_PATH = "small_corr_1.mp4"  # Change this to 0 for Webcam
+VIDEO_PATH = "small_corr_w_obs_1.mp4"  # Change this to 0 for Webcam
 LABELS = ["BACKGROUND", "steelball", "pipe"] 
 CONF_THRESHOLD = 0.4
 NMS_THRESHOLD = 0.4

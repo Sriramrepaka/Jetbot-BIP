@@ -1,36 +1,42 @@
-import jetson_inference
-import jetson_utils
+import jetson.inference
+import jetson.utils
+import numpy as np
 
-# Initialize the segNet object
-# We point it to your custom ONNX file and define the input/output names used in the export
-net = jetson_inference.segNet(argv=[
-    f"--model=ONNX/strip_detector_nano.engine",  # Point to the .engine instead of .onnx
-    f"--labels=ONNX/classes.txt",
-    f"--colors=colors.txt",
-    f"--input-blob=input_0",
-    f"--output-blob=output_0"
+# 1. Initialize segNet (Model is the same)
+net = jetson.inference.segNet(argv=[
+    "--model=ONNX/strip_detector_nano.engine",
+    "--input-blob=input_0",
+    "--output-blob=output_0",
+    "--input-scale=0.00392156",
+    "--labels=ONNX/classes.txt",
+    "--colors=ONNX/colors.txt"
 ])
 
-# Setup video source (CSI camera or video file)
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/u_corr.mp4") 
-display = jetson_utils.videoOutput("display://0")
+# 2. Update Source: Point to your video file instead of "csi://0"
+# Replace 'path/to/your_video.mp4' with your actual filename
+video_path = "../BIP_videos_roboter_cam/big_corr_1.mp4"
+input = jetson.utils.videoSource(video_path) 
+display = jetson.utils.videoOutput("display://0")
+
+# Buffer for GPU-accelerated cropping (Remains 224x112)
+img_cropped = jetson.utils.cudaAllocMapped(width=224, height=112, format="rgb8")
 
 while display.IsStreaming():
-    # 1. Capture the image
-    img_full = camera.Capture()
-
-    crop_roi = (0, 112, 224, 224)
-
-    img_cropped = jetson_utils.cudaAllocMapped(width=224, height=112, format=img_full.format)
-    jetson_utils.cudaCrop(img_full, img_cropped, crop_roi)
+    # 3. Capture a frame from the video
+    img_full = input.Capture()
     
-    # 2. Process Segmentation
-    # Note: segNet will automatically handle the resizing and normalization
+    # Check if video has ended
+    if img_full is None:
+        print("End of video stream")
+        break
+    
+    # 4. GPU-Accelerated Crop (Matches your training)
+    # This assumes the video is also roughly 224x224 or scaled similarly
+    jetson_utils.cudaCrop(img_full, img_cropped, (0, 112, 224, 224))
+    
+    # 5. Inference and Overlay
     net.Process(img_cropped)
+    net.Overlay(img_cropped, filter_mode="linear", alpha=150)
     
-    # 3. Overlay the segmentation mask
-    net.Overlay(img_cropped, width=img.width, height=img.height, filter_mode="linear")
-    
-    # 4. Render the results
     display.Render(img_cropped)
-    display.SetStatus(f"segNet | {net.GetNetworkFPS():.1f} FPS")
+    display.SetStatus(f"Inference: {net.GetNetworkTime():.2f}ms | FPS: {net.GetNetworkFPS():.1f}")

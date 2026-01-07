@@ -5,7 +5,7 @@ import time
 
 
 # 1. Load the model
-session = ort.InferenceSession("../Image Processing/ONNX/strip_detector.onnx")
+session = ort.InferenceSession("../Image Processing/ONNX/strip_detector_nano.onnx")
 input_name = session.get_inputs()[0].name
 
 # 2. Open Video
@@ -42,7 +42,7 @@ while cap.isOpened():
     hsv_full = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     mask_hsv = cv2.inRange(hsv_full, hsv_min, hsv_max)
 
-    mask = (mask > 0.5).astype(np.uint8) * 255
+    mask = (mask < 0.5).astype(np.uint8) * 255
     #mask = cv2.dilate(mask, np.ones((3,3), np.uint8), iterations=1) # Thicken strips
 
     final_mask = cv2.bitwise_or(mask,mask_hsv)

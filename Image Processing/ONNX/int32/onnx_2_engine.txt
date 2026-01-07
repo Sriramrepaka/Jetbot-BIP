@@ -1,0 +1,4 @@
+/usr/src/tensorrt/bin/trtexec --onnx=final_jetson_model.onnx \
+                              --saveEngine=strip_model.engine \
+                              --fp16 \
+                              --workspace=512

@@ -2,48 +2,35 @@ import jetson_inference
 import jetson_utils
 import numpy as np
 
-# 1. Initialize Network
-net = jetson_inference.tensorNet(argv=[
-    "--model=ONNX/strip_detector_nano.engine",
-    "--input-blob=input_0",
-    "--output-blob=output_0",
-    "--input-scale=0.00392156"  # PC-matched 1/255 scale
-])
+# 1. Load using tensorNet instead of segNet to bypass the "1-class" restriction
+net = jetson_inference.tensorNet()
+net.LoadNetwork(model="ONNX/int32/strip_model.engine", 
+                input_blob="input_0", 
+                output_blob="output_0")
 
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_1.mp4", argv=["--input-width=224", "--input-height=224"])
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_1.mp4")
 display = jetson_utils.videoOutput("display://0")
 
-# Pre-allocate GPU memory for the bottom-half crop
-img_cropped = jetson_utils.cudaAllocMapped(width=224, height=112, format="rgb8")
-
 while display.IsStreaming():
-    img_full = camera.Capture()
-    if img_full is None: continue
+    img = camera.Capture()
     
-    # 2. GPU-Accelerated Crop (0, 112 to 224, 224)
-    jetson_utils.cudaCrop(img_full, img_cropped, (0, 112, 224, 224))
+    # 2. Run Inference
+    # This gives us the raw memory pointer
+    net.Process(img)
     
-    # 3. MANUAL INFERENCE CYCLE
-    # Since your build lacks high-level methods, we use the direct execution path
-    # This automatically maps the 'img_cropped' memory to the 'input_0' blob
-    net.Execute() 
+    # 3. Pull the 1-channel mask into NumPy
+    # Since your shape is (1,1,H,W), we get a 2D array of 0, 1, and 2
+    mask_cuda = net.GetOutput(0) # Index 0 is your output_0
+    mask_np = jetson_utils.cudaToNumpy(mask_cuda)
     
-    # 4. GET THE OUTPUT
-    # GetOutput(0) returns the raw float32 tensor from your Maxwell GPU
-    output_cuda = net.GetOutput(0) 
+    # 4. Create your own visualization
+    # We create a colored version of the original image
+    img_np = jetson_utils.cudaToNumpy(img)
     
-    # 5. POST-PROCESSING (Matching your PC logic)
-    # Convert to NumPy for thresholding
-    mask_np = jetson_utils.cudaToNumpy(output_cuda)
+    # Find pixels where class is 1 (White) or 2 (Red)
+    img_np[mask_np[0] == 1] = [255, 255, 255] # Paint White
+    img_np[mask_np[0] == 2] = [255, 0, 0]     # Paint Red
     
-    # Apply your PC threshold (Sigmoid 0.5)
-    # Multiply by 255 to create a visible white/black mask
-    binary_mask = (mask_np > 0.5).astype(np.uint8) * 255
-    
-    # 6. VISUALIZATION
-    # Convert binary mask back to CUDA for display
-    mask_visual = jetson_utils.cudaFromNumpy(binary_mask)
-    
-    # Render the cropped view and show the network stats
-    display.Render(img_cropped)
-    display.SetStatus(f"Inference Time: {net.GetNetworkTime():.2f}ms | {net.GetNetworkFPS():.1f} FPS")
+    # 5. Render back to the display
+    display.Render(jetson_utils.cudaFromNumpy(img_np))
+    display.SetStatus(f"Manual Seg | {net.GetNetworkFPS():.1f} FPS")

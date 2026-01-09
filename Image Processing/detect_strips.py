@@ -4,7 +4,7 @@ import jetson_utils
 # 1. Load the model using segNet
 # Note: input_blob and output_blob must match your ONNX names (input_0, output_0)
 net = jetson_inference.segNet(argv=[
-    '--model=ONNX/int32/strip_model.engine', 
+    '--model=ONNX/int32/strip_model_3.engine', 
     '--labels=ONNX/int32/labels.txt', 
     '--colors=ONNX/int32/colors.txt',
     '--input-blob=input_0', 

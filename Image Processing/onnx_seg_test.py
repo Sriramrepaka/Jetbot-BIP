@@ -5,11 +5,11 @@ import time
 
 
 # 1. Load the model
-session = ort.InferenceSession("../Image Processing/ONNX/strip_detector_nano.onnx")
+session = ort.InferenceSession("C:/Users/srira/Documents/BIP_Repo/Jetbot-BIP/Image Processing/ONNX/final_jetson_model_3.onnx")
 input_name = session.get_inputs()[0].name
 
 # 2. Open Video
-cap = cv2.VideoCapture("big_corr_w_sun_w_obs_1.mp4")
+cap = cv2.VideoCapture("big_corr_1.mp4")
 
 fps_start_time = 0
 fps = 0
@@ -27,7 +27,7 @@ while cap.isOpened():
     roi = img[112:224, 0:224] # Get bottom 112 pixels
     
     # Format for model: CHW and Normalization
-    blob = roi.astype(np.float32) / 255.0
+    blob = img.astype(np.float32) / 255.0
     blob = np.transpose(blob, (2, 0, 1))
     blob = np.expand_dims(blob, axis=0)
 
@@ -42,11 +42,12 @@ while cap.isOpened():
     hsv_full = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     mask_hsv = cv2.inRange(hsv_full, hsv_min, hsv_max)
 
-    mask = (mask < 0.5).astype(np.uint8) * 255
+    #mask = (mask < 0.5).astype(np.uint8) * 255
+    mask = np.argmax(logits, axis=1)[0]
     #mask = cv2.dilate(mask, np.ones((3,3), np.uint8), iterations=1) # Thicken strips
 
-    final_mask = cv2.bitwise_or(mask,mask_hsv)
-    final_mask = cv2.dilate(final_mask, np.ones((3,3), np.uint8), iterations=1)
+    #final_mask = cv2.bitwise_or(mask,mask_hsv)
+    final_mask = cv2.dilate(mask, np.ones((3,3), np.uint8), iterations=1)
 
     end_time = time.time()
     fps = 1.0 / (end_time - start_time)

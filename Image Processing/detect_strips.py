@@ -1,6 +1,7 @@
 import jetson_inference
 import jetson_utils
 import numpy as np
+import math
 import cv2
 
 # 1. Load the model using segNet
@@ -15,8 +16,13 @@ net = jetson_inference.segNet(argv=[
 
 # 2. Setup Camera and Display
 # '/dev/video0' for USB, 'csi://0' for Raspberry Pi Cam
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_1.mp4") 
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_w_obs_a_video.mp4") 
 display = jetson_utils.videoOutput("display://0") 
+
+grid_w, grid_h = 224, 128
+class_mask = jetson_utils.cudaAllocMapped(width=grid_w, height=grid_h, format="gray8")
+
+kernel = np.ones((5, 5), np.uint8)
 
 while display.IsStreaming():
     # Capture the image (lives in GPU memory)
@@ -39,19 +45,46 @@ while display.IsStreaming():
     # Inference & Overlay
     # filter-mode='point' is faster for the Nano
     net.Process(patch)
-    net.Mask(patch, width=224, height=128)
+    net.Mask(class_mask, grid_w, grid_h)
 
-    mask_array = jetson_utils.cudaToNumpy(net.GetMask())
+    mask_np = jetson_utils.cudaToNumpy(class_mask)
 
-    # Class IDs: 1 = Red, 2 = White
-    red_indices = np.where(mask_array == 1)[1]
-    white_indices = np.where(mask_array == 2)[1]
+    #mask_np = cv2.dilate(mask_np, kernel, iterations=1)
 
-    if len(red_indices) > 0:
-        red_center = np.mean(red_indices)
-        error = red_center - 112 # 112 is the center of the 224-width patch
-        print(f"🔴 Red Strip Found! Error: {error:.2f}")
-    
+    y_low = 90
+    y_high = 40
+
+    mid_low = None
+    mid_high = None
+
+    low_pixels = np.where(mask_np[y_low, :] > 0)[0]
+    high_pixels = np.where(mask_np[y_high, :] > 0)[0]
+
+    if len(low_pixels) > 0 and len(high_pixels) > 0:
+
+        mid_low = np.mean(low_pixels)
+        mid_high = np.mean(high_pixels)
+
+        angle1 = math.degrees(math.atan2(mid_low - 112, 128 - y_low))
+        angle2 = math.degrees(math.atan2(mid_high - mid_low, y_low - y_high))
+
+        final_steering = (angle1 * 0.7) + (angle2 * 0.3)
+
+        print(f"Final steering {final_steering}")
+
+    red_color = (255, 0, 0, 255)
+    dot_radius = 5
+
+    if mid_low is not None:
+        # Coordinates must be integers
+        cx, cy = int(mid_low), int(y_low)
+        jetson_utils.cudaDrawCircle(patch, (cx, cy), dot_radius, red_color)
+
+    # 3. Draw Red Dot on the Top Line Midpoint
+    if mid_high is not None:
+        cx, cy = int(mid_high), int(y_high)
+        jetson_utils.cudaDrawCircle(patch, (cx, cy), dot_radius, red_color)
+
     # 5. Visual Feedback
     display.Render(patch)
     display.SetStatus(f"segNet FPS: {net.GetNetworkFPS():.1f}")

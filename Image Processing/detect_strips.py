@@ -3,6 +3,7 @@ import jetson_utils
 import numpy as np
 import math
 import cv2
+import time
 
 # 1. Load the model using segNet
 # Note: input_blob and output_blob must match your ONNX names (input_0, output_0)
@@ -16,7 +17,7 @@ net = jetson_inference.segNet(argv=[
 
 # 2. Setup Camera and Display
 # '/dev/video0' for USB, 'csi://0' for Raspberry Pi Cam
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_w_obs_a_video.mp4") 
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/u_corr_2.mp4") 
 display = jetson_utils.videoOutput("display://0") 
 
 grid_w, grid_h = 224, 128
@@ -49,10 +50,10 @@ while display.IsStreaming():
 
     mask_np = jetson_utils.cudaToNumpy(class_mask)
 
-    #mask_np = cv2.dilate(mask_np, kernel, iterations=1)
+    mask_np = cv2.dilate(mask_np, kernel, iterations=2)
 
-    y_low = 90
-    y_high = 40
+    y_low = 80
+    y_high = 35
 
     mid_low = None
     mid_high = None
@@ -74,6 +75,8 @@ while display.IsStreaming():
 
     red_color = (255, 0, 0, 255)
     dot_radius = 5
+ 
+    net.Mask(patch)
 
     if mid_low is not None:
         # Coordinates must be integers
@@ -85,6 +88,9 @@ while display.IsStreaming():
         cx, cy = int(mid_high), int(y_high)
         jetson_utils.cudaDrawCircle(patch, (cx, cy), dot_radius, red_color)
 
+    
+
     # 5. Visual Feedback
+    time.sleep(0.04)
     display.Render(patch)
     display.SetStatus(f"segNet FPS: {net.GetNetworkFPS():.1f}")

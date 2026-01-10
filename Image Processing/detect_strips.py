@@ -51,8 +51,8 @@ while display.IsStreaming():
 
     #mask_np = cv2.dilate(mask_np, kernel, iterations=1)
 
-    y_low = 90
-    y_high = 40
+    y_low = 80
+    y_high = 35
 
     mid_low = None
     mid_high = None

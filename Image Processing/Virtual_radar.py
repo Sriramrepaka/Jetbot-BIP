@@ -6,22 +6,38 @@ import cv2
 import time
 
 # 1. Setup
-net = jetson_inference.segNet(argv=['--model=patch_model_128.onnx', '--labels=labels.txt', '--colors=colors.txt'])
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_w_obs_a_video.mp4")
+net = jetson_inference.segNet(argv=[
+    '--model=ONNX/int32/final_jetson_model_crop.onnx', 
+    '--labels=ONNX/int32/labels.txt', 
+    '--colors=ONNX/int32/colors.txt',
+    '--precision=fp32',
+    '--input-blob=input_0', 
+    '--output-blob=output_0'
+])
+
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/u_corr.mp4")
 display = jetson_utils.videoOutput("display://0")
 
 # Radar Config
 ROBOT_X, ROBOT_Y = 112, 127  # Origin in the 128x224 patch
-RADAR_RADIUS = 100           # How far ahead the radar "sees"
-SCAN_ANGLES = np.linspace(-60, 60, 15)  # 15 rays from -60 to +60 degrees
+RADAR_RADIUS = 120          # How far ahead the radar "sees"
+SCAN_ANGLES = np.linspace(-50, 50, 20)  # 15 rays from -60 to +60 degrees
 
 while display.IsStreaming():
     img = camera.Capture()
     if img is None: continue
 
+    h = img.height
+    w = img.width
+
+    left = (w // 2) - 112
+    top = h - 128
+    right = (w // 2) + 112
+    bottom = h
+
     # Capture 128x224 Patch
     patch = jetson_utils.cudaAllocMapped(width=224, height=128, format=img.format)
-    jetson_utils.cudaCrop(img, patch, (528, 592, 752, 720))
+    jetson_utils.cudaCrop(img, patch, (left, top, right, bottom))
     
     net.Process(patch)
     

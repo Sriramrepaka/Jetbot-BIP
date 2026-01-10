@@ -46,6 +46,10 @@ while display.IsStreaming():
     net.Mask(class_mask, 224, 128)
     mask_np = cv2.dilate(jetson_utils.cudaToNumpy(class_mask), np.ones((5,5), np.uint8))
 
+    weights = np.exp(-0.5 * (np.linspace(-1, 1, len(SCAN_ANGLES))**2))
+
+    weighted_distances = np.array(radar_distances) * weights
+
     # --- RADAR LOGIC ---
     radar_distances = []
     
@@ -68,9 +72,21 @@ while display.IsStreaming():
 
     # --- PATH PLANNING: Find the Safest Opening ---
     # We find the angle that has the furthest clear distance
-    best_index = np.argmax(radar_distances)
-    target_angle = SCAN_ANGLES[best_index]
-    max_path_dist = radar_distances[best_index]
+    #best_index = np.argmax(radar_distances)
+
+    center_dist = radar_distances[len(SCAN_ANGLES)//2]
+
+    if center_dist > 70:
+        target_angle = 0.0
+        max_path_dist = center_dist
+        print("✅ Front is clear, maintaining forward heading.")
+    else:
+        # If front is blocked, find the best weighted alternative
+        best_index = np.argmax(weighted_distances)
+        target_angle = SCAN_ANGLES[best_index]
+        max_path_dist = radar_distances[best_index]
+        print(f"🔄 Front blocked ({center_dist}px). Steering to: {target_angle:.1f}°")
+
 
     # --- VISUAL FEEDBACK ---
     net.Mask(patch, 224, 128) # Show lane detections

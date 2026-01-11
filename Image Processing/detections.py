@@ -26,19 +26,26 @@ camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_w_obs_a_vi
 display = jetson_utils.videoOutput("display://0") 
 display1 = jetson_utils.videoOutput("display://0")
 
-PATCH_W, PATCH_H = 224, 128
-CANVAS_W, CANVAS_H = 300, 300
-
-#canvas = jetson_utils.cudaAllocMapped(width=CANVAS_W, height=CANVAS_H, format='rgb8')
 patch = jetson_utils.cudaAllocMapped(width=224, height=128, format='rgb8')
+class_mask = jetson_utils.cudaAllocMapped(width=224, height=128, format="gray8")
 
-# Radar Config: Origin is bottom-center of the 300x300 canvas
-# We place the 224-wide patch at X=38 (to center it: (300-224)/2)
-# We place the 128-high patch at Y=172 (at the bottom: 300-128)
 
 ROBOT_X, ROBOT_Y = 112, 127
 RADAR_RADIUS = 120
 SCAN_ANGLES = np.linspace(-60, 60, 20)
+ray_lookup = []
+
+for angle in SCAN_ANGLES:
+    rad = math.radians(angle)
+    coords = []
+    for r in range(10, RADAR_RADIUS, 10): # Step 10 is much faster
+        curr_x = int(ROBOT_X + r * math.sin(rad))
+        curr_y = int(ROBOT_Y - r * math.cos(rad))
+        if 0 <= curr_x < 224 and 0 <= curr_y < 128:
+            coords.append((curr_x, curr_y, r))
+    ray_lookup.append(coords)
+
+
 weights = np.exp(-0.5 * (np.linspace(-1, 1, len(SCAN_ANGLES))**2)) # Center priority
 
 while display.IsStreaming():
@@ -56,35 +63,26 @@ while display.IsStreaming():
     bottom = h
 
     # 2. CROP THE SHARED PATCH (128x224)
-    
     jetson_utils.cudaCrop(img, patch, (left, top, right, bottom))
 
     lane_net.Process(patch)
     detections = obj_net.Detect(patch)
     
-    class_mask = jetson_utils.cudaAllocMapped(width=224, height=128, format="gray8")
     lane_net.Mask(class_mask, 224, 128)
     mask_np = cv2.dilate(jetson_utils.cudaToNumpy(class_mask), np.ones((5,5), np.uint8))
     
     radar_distances = []
-    for angle in SCAN_ANGLES:
-        rad = math.radians(angle)
+    for ray in ray_lookup:
         hit_dist = RADAR_RADIUS
-        
-        for r in range(5, RADAR_RADIUS, 4):
-            curr_x = int(ROBOT_X + r * math.sin(rad))
-            curr_y = int(ROBOT_Y - r * math.cos(rad))
-            
-            if 0 <= curr_x < 224 and 0 <= curr_y < 128:
-                if mask_np[curr_y, curr_x] > 0: # Hit a Red or White line
-                    hit_dist = r
-                    break
-                
-                # --- OBJECT CHECK (DetectNet Bounding Boxes) ---
-                # We check if this radar point falls inside any detected bounding box
+        for cx, cy, r in ray:
+            # Check Lane
+            if mask_np[cy, cx] > 0:
+                hit_dist = r; break
+            # Check Objects (Only if objects exist)
+            if detections:
                 for obj in detections:
-                    if obj.Left <= curr_x <= obj.Right and obj.Top <= curr_y <= obj.Bottom:
-                        hit_dist = r;break
+                    if obj.Left <= cx <= obj.Right and obj.Top <= cy <= obj.Bottom:
+                        hit_dist = r; break
                 if hit_dist < RADAR_RADIUS: break
         
         radar_distances.append(hit_dist)
@@ -96,13 +94,13 @@ while display.IsStreaming():
     if center_dist > 70:
         target_angle = 0.0
         max_path_dist = center_dist
-        print("✅ Front is clear, maintaining forward heading.")
+        print("Front is clear, maintaining forward heading.")
     else:
         # If front is blocked, find the best weighted alternative
         best_index = np.argmax(weighted_distances)
         target_angle = SCAN_ANGLES[best_index]
         max_path_dist = radar_distances[best_index]
-        print(f"🔄 Front blocked ({center_dist}px). Steering to: {target_angle:.1f}°")
+        print(f"Front blocked ({center_dist}px). Steering to: {target_angle:.1f}°")
 
 
     # --- VISUAL FEEDBACK ---

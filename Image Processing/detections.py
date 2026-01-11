@@ -39,7 +39,7 @@ ray_lookup = []
 for angle in SCAN_ANGLES:
     rad = math.radians(angle)
     coords = []
-    for r in range(10, RADAR_RADIUS, 10): # Step 10 is much faster
+    for r in range(15, RADAR_RADIUS, 5): # Step 10 is much faster
         curr_x = int(ROBOT_X + r * math.sin(rad))
         curr_y = int(ROBOT_Y - r * math.cos(rad))
         if 0 <= curr_x < 224 and 0 <= curr_y < 128:
@@ -74,28 +74,33 @@ while display.IsStreaming():
 
     lane_net.Mask(class_mask, 224, 128)
     mask_np = jetson_utils.cudaToNumpy(class_mask)
-    mask_np[0:40, :] = cv2.dilate(mask_np[0:40, :], np.ones((1, 9), np.uint8))
+    
+    tslice = mask_np[0:20, :]
+    mask_np_p = cv2.dilate(tslice, np.ones((3, 50), np.int8))
+    mask_np[0:20, :] = mask_np_p[:,:,np.newaxis]
+    
 
     if detections:
         for obj in detections:
             cv2.rectangle(mask_np, (int(obj.Left), int(obj.Top)),(int(obj.Right),int(obj.Bottom)),255,-1)
     
     radar_distances = []
+    
     for ray in ray_lookup:
         hit_dist = RADAR_RADIUS
         for cx, cy, r in ray:
             # Check Lane
-            if mask_np[cy, cx] > 0:
+            if mask_np[cy, cx, 0] > 0:
                 hit_dist = r; break
             # Check Objects (Only if objects exist)
        
         radar_distances.append(hit_dist)
-
+   
     weighted_distances = np.array(radar_distances) * weights
 
     # --- Path Selection Constants ---
     MIDDLE_INDICES = range(len(SCAN_ANGLES)//2 - 3, len(SCAN_ANGLES)//2 + 3) # 5 Middle wedges
-    CLEAR_THRESHOLD = 80 # Distance in px to consider a ray "clear"
+    CLEAR_THRESHOLD = 100 # Distance in px to consider a ray "clear"
 
     # 1. Analyze the Middle Zone
     # Check if all rays in the middle 5-6 wedges are clear
@@ -162,9 +167,12 @@ while display.IsStreaming():
     jetson_utils.cudaDrawLine(patch, (ROBOT_X, ROBOT_Y), (tx, ty), (0, 0, 255, 255), 4)
     
     total_fps = 1.0 / (time.time() - loop_start)
-    debug_mask_cuda = jetson_utils.cudaFromNumpy(mask_np)
+    display_np = np.where(mask_np > 0, 255, 0).astype(np.uint8)
+    rendernp = cv2.cvtColor(display_np,cv2.COLOR_GRAY2RGB)
+    debug_mask_cuda = jetson_utils.cudaFromNumpy(rendernp)
     print(f"Total FPS: {total_fps:.1f} | Lane FPS: {lane_net.GetNetworkFPS():.1f} | Obj FPS: {obj_net.GetNetworkFPS():.1f}")
     status = f"Total FPS: {total_fps:.1f} | Lane FPS: {lane_net.GetNetworkFPS():.1f} | Obj FPS: {obj_net.GetNetworkFPS():.1f}"
+    time.sleep(1)
     display.SetStatus(status)
     display1.Render(debug_mask_cuda)
     display.Render(patch)

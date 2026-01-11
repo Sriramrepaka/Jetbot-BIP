@@ -114,8 +114,15 @@ while display.IsStreaming():
         current_weights[:len(SCAN_ANGLES)//2] *= 0.5
         print("Obstacle left: Prioritizing right wedges.")
 
+    # After calculating radar_distances, filter out sudden 'jumps'
+    filtered_distances = np.array(radar_distances).copy()
+    for i in range(1, len(radar_distances) - 1):
+    # If a ray is 50px longer than both its neighbors, it's probably a broken line gap
+        if radar_distances[i] > radar_distances[i-1] + 40 and radar_distances[i] > radar_distances[i+1] + 40:
+            filtered_distances[i] = (radar_distances[i-1] + radar_distances[i+1]) / 2
+
     # 3. Final Decision Logic
-    weighted_distances = np.array(radar_distances) * current_weights
+    weighted_distances = np.array(filtered_distances) * current_weights
 
     if middle_zone_clear:
         # If the whole middle area is clear, stay straight

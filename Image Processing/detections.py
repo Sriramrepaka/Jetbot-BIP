@@ -69,14 +69,12 @@ while display.IsStreaming():
     # 2. CROP THE SHARED PATCH (128x224)
     jetson_utils.cudaCrop(img, patch, (left, top, right, bottom))
     
-    
     lane_net.Process(patch)
     detections = obj_net.Detect(patch)
 
-
     lane_net.Mask(class_mask, 224, 128)
-    #mask_np = cv2.dilate(jetson_utils.cudaToNumpy(class_mask), np.ones((5,5), np.uint8))
     mask_np = jetson_utils.cudaToNumpy(class_mask)
+    mask_np[0:40, :] = cv2.dilate(mask_np[0:40, :], np.ones((1, 9), np.uint8))
 
     if detections:
         for obj in detections:
@@ -164,11 +162,11 @@ while display.IsStreaming():
     jetson_utils.cudaDrawLine(patch, (ROBOT_X, ROBOT_Y), (tx, ty), (0, 0, 255, 255), 4)
     
     total_fps = 1.0 / (time.time() - loop_start)
-    
+    debug_mask_cuda = jetson_utils.cudaFromNumpy(mask_np)
     print(f"Total FPS: {total_fps:.1f} | Lane FPS: {lane_net.GetNetworkFPS():.1f} | Obj FPS: {obj_net.GetNetworkFPS():.1f}")
     status = f"Total FPS: {total_fps:.1f} | Lane FPS: {lane_net.GetNetworkFPS():.1f} | Obj FPS: {obj_net.GetNetworkFPS():.1f}"
     display.SetStatus(status)
-    display1.Render(img)
+    display1.Render(debug_mask_cuda)
     display.Render(patch)
     #print(f"Steer toward: {target_angle:.1f}° | Path Depth: {max_path_dist}px")
     

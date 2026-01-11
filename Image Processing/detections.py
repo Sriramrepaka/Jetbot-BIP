@@ -22,12 +22,13 @@ obj_net = jetson_inference.detectNet(argv=[
     '--threshold=0.3'
 ])
 
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/big_corr_w_obs_a_video.mp4") 
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/small_corr_w_obs_1.mp4") 
 display = jetson_utils.videoOutput("display://0") 
 display1 = jetson_utils.videoOutput("display://0")
 
 patch = jetson_utils.cudaAllocMapped(width=224, height=128, format='rgb8')
 class_mask = jetson_utils.cudaAllocMapped(width=224, height=128, format="gray8")
+mask_np = np.zeros((128,224),dtype=np.uint8)
 
 
 ROBOT_X, ROBOT_Y = 112, 127
@@ -47,6 +48,9 @@ for angle in SCAN_ANGLES:
 
 
 weights = np.exp(-0.5 * (np.linspace(-1, 1, len(SCAN_ANGLES))**2)) # Center priority
+i = 0
+detections = []
+
 
 while display.IsStreaming():
     loop_start = time.time()
@@ -57,19 +61,26 @@ while display.IsStreaming():
     h = img.height
     w = img.width
 
-    left = (w // 2) - 112
-    top = h - 128
-    right = (w // 2) + 112
-    bottom = h
+    left = int((w // 2) - 112)
+    top = int(h - 128)
+    right = int((w // 2) + 112)
+    bottom = int(h)
 
     # 2. CROP THE SHARED PATCH (128x224)
     jetson_utils.cudaCrop(img, patch, (left, top, right, bottom))
-
+    
+    
     lane_net.Process(patch)
     detections = obj_net.Detect(patch)
-    
+
+
     lane_net.Mask(class_mask, 224, 128)
-    mask_np = cv2.dilate(jetson_utils.cudaToNumpy(class_mask), np.ones((5,5), np.uint8))
+    #mask_np = cv2.dilate(jetson_utils.cudaToNumpy(class_mask), np.ones((5,5), np.uint8))
+    mask_np = jetson_utils.cudaToNumpy(class_mask)
+
+    if detections:
+        for obj in detections:
+            cv2.rectangle(mask_np, (int(obj.Left), int(obj.Top)),(int(obj.Right),int(obj.Bottom)),255,-1)
     
     radar_distances = []
     for ray in ray_lookup:
@@ -79,12 +90,7 @@ while display.IsStreaming():
             if mask_np[cy, cx] > 0:
                 hit_dist = r; break
             # Check Objects (Only if objects exist)
-            if detections:
-                for obj in detections:
-                    if obj.Left <= cx <= obj.Right and obj.Top <= cy <= obj.Bottom:
-                        hit_dist = r; break
-                if hit_dist < RADAR_RADIUS: break
-        
+       
         radar_distances.append(hit_dist)
 
     weighted_distances = np.array(radar_distances) * weights

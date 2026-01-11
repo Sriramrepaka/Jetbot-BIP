@@ -48,7 +48,7 @@ while display.IsStreaming():
 
     weights = np.exp(-0.5 * (np.linspace(-1, 1, len(SCAN_ANGLES))**2))
 
-    weighted_distances = np.array(radar_distances) * weights
+    #weighted_distances = np.array(radar_distances) * weights
 
     # --- RADAR LOGIC ---
     radar_distances = []
@@ -69,6 +69,8 @@ while display.IsStreaming():
                     break
         
         radar_distances.append(hit_dist)
+
+    weighted_distances = np.array(radar_distances) * weights
 
     # --- PATH PLANNING: Find the Safest Opening ---
     # We find the angle that has the furthest clear distance

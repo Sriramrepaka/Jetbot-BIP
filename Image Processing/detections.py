@@ -33,7 +33,7 @@ mask_np = np.zeros((128,224),dtype=np.uint8)
 
 ROBOT_X, ROBOT_Y = 112, 127
 RADAR_RADIUS = 120
-SCAN_ANGLES = np.linspace(-60, 60, 20)
+SCAN_ANGLES = np.linspace(-60, 60, 15)
 ray_lookup = []
 
 for angle in SCAN_ANGLES:
@@ -94,19 +94,46 @@ while display.IsStreaming():
         radar_distances.append(hit_dist)
 
     weighted_distances = np.array(radar_distances) * weights
-    
-    center_dist = radar_distances[len(SCAN_ANGLES)//2]
 
-    if center_dist > 100:
+    # --- Path Selection Constants ---
+    MIDDLE_INDICES = range(len(SCAN_ANGLES)//2 - 3, len(SCAN_ANGLES)//2 + 3) # 5 Middle wedges
+    CLEAR_THRESHOLD = 80 # Distance in px to consider a ray "clear"
+
+    # 1. Analyze the Middle Zone
+    # Check if all rays in the middle 5-6 wedges are clear
+    middle_zone_clear = all(radar_distances[i] > CLEAR_THRESHOLD for i in MIDDLE_INDICES)
+
+    # 2. Dynamic Weight Adjustment (Opposite-Side Steering)
+    # We copy the base weights so we don't permanently change them
+    current_weights = weights.copy()
+
+    # Look at the far left and far right for obstacles
+    left_obstruction = np.mean(radar_distances[:5]) < 50
+    right_obstruction = np.mean(radar_distances[-5:]) < 50
+
+    if right_obstruction:
+        # Scale down weights on the right to force steering left
+        current_weights[len(SCAN_ANGLES)//2:] *= 0.5 
+        print("Obstacle right: Prioritizing left wedges.")
+    elif left_obstruction:
+        # Scale down weights on the left to force steering right
+        current_weights[:len(SCAN_ANGLES)//2] *= 0.5
+        print("Obstacle left: Prioritizing right wedges.")
+
+    # 3. Final Decision Logic
+    weighted_distances = np.array(radar_distances) * current_weights
+
+    if middle_zone_clear:
+        # If the whole middle area is clear, stay straight
         target_angle = 0.0
-        max_path_dist = center_dist
-        print("Front is clear, maintaining forward heading.")
+        max_path_dist = np.mean([radar_distances[i] for i in MIDDLE_INDICES])
+        print("Middle Zone is clear, maintaining forward heading.")
     else:
-        # If front is blocked, find the best weighted alternative
+        # If middle is blocked, find the best weighted gap
         best_index = np.argmax(weighted_distances)
         target_angle = SCAN_ANGLES[best_index]
         max_path_dist = radar_distances[best_index]
-        print(f"Front blocked ({center_dist}px). Steering to: {target_angle:.1f}°")
+        print(f"Pathfinding: Steering to {target_angle:.1f}°")
 
 
     # --- VISUAL FEEDBACK ---

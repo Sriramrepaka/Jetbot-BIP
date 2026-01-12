@@ -8,16 +8,19 @@ import time
 # 1. Load the model using segNet
 # Note: input_blob and output_blob must match your ONNX names (input_0, output_0)
 net = jetson_inference.segNet(argv=[
-    '--model=ONNX/int32/final_jetson_model_crop.onnx', 
+    '--model=ONNX/int32/final_jetson_model_crop_wdl.onnx', 
     '--labels=ONNX/int32/labels.txt', 
     '--colors=ONNX/int32/colors.txt',
     '--input-blob=input_0', 
-    '--output-blob=output_0'
+    '--output-blob=output_0',
+    '--mean-infer=107.53,107.15,105.06',
+    '--std-infer=43.58,43.89,43.32',
+    '--filter-mode=point'
 ])
 
 # 2. Setup Camera and Display
 # '/dev/video0' for USB, 'csi://0' for Raspberry Pi Cam
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/u_corr_2.mp4") 
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/small_corr_w_obs_1.mp4") 
 display = jetson_utils.videoOutput("display://0") 
 
 grid_w, grid_h = 224, 128

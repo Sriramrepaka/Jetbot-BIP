@@ -6,7 +6,7 @@ import cv2
 import time
 
 lane_net = jetson_inference.segNet(argv=[
-    '--model=ONNX/int32/final_jetson_model_crop.onnx', 
+    '--model=ONNX/int32/final_jetson_model_crop_wdl.onnx', 
     '--labels=ONNX/int32/labels.txt', 
     '--colors=ONNX/int32/colors.txt',
     '--input-blob=input_0', 
@@ -22,7 +22,7 @@ obj_net = jetson_inference.detectNet(argv=[
     '--threshold=0.3'
 ])
 
-camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/small_corr_w_obs_1.mp4") 
+camera = jetson_utils.videoSource("../BIP_videos_roboter_cam/u_corr.mp4") 
 display = jetson_utils.videoOutput("display://0") 
 display1 = jetson_utils.videoOutput("display://0")
 
@@ -75,9 +75,9 @@ while display.IsStreaming():
     lane_net.Mask(class_mask, 224, 128)
     mask_np = jetson_utils.cudaToNumpy(class_mask)
     
-    tslice = mask_np[0:20, :]
-    mask_np_p = cv2.dilate(tslice, np.ones((3, 50), np.int8))
-    mask_np[0:20, :] = mask_np_p[:,:,np.newaxis]
+    
+    mask_np = cv2.dilate(mask_np, np.ones((3,3), np.int8))
+    
     
 
     if detections:
@@ -90,7 +90,7 @@ while display.IsStreaming():
         hit_dist = RADAR_RADIUS
         for cx, cy, r in ray:
             # Check Lane
-            if mask_np[cy, cx, 0] > 0:
+            if mask_np[cy, cx] > 0:
                 hit_dist = r; break
             # Check Objects (Only if objects exist)
        

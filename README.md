@@ -95,3 +95,11 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 ## ⚠️ Known Edge Cases
 * **Low Lighting:** High ISO noise can occasionally create false boundaries in the segmentation mask.
 * **Total Obstruction:** If the path is 100% blocked, the robot is programmed to maintain its last known valid heading at reduced speed.
+---
+
+## Final Output
+
+    ![result_com](https://github.com/user-attachments/assets/81944fa1-b5ca-4e6f-b8b1-b0655069f8d5)
+
+
+

@@ -39,7 +39,7 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 2.  **Mask Generation:** `segNet` produces a lane mask. Any objects detected by `detectNet` are "burned" into this mask as impassable obstacles.
 3.  **Ray-Casting:** 15 virtual rays are projected from the robot's base. Each ray "walks" through the mask until it hits a boundary or obstacle.
 4.  **Weighted Voting:** Rays in the center are weighted more heavily. If an obstacle is detected on the right, the weights for the right-side rays are reduced, forcing the robot to steer left.
-5.  **Steering Smoothing:** A steering smoothing factor ($0.7 \times \text{last\_steering} + 0.3 \times \text{new\_angle}$) prevents jittery movement.
+5.  **Steering Smoothing:** A steering smoothing factor 0.7*last_steering + 0.3*new_angle prevents jittery movement.
 6.  **Obstacle Avoidance:** The node also uses LiDAR to detect big obstacles and turns accodingly to avoid the object, LiDAR is prioritised over object and lane detections. 
 
 

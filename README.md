@@ -64,6 +64,11 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 
     ![u_corr](https://github.com/user-attachments/assets/9fe2607e-0a1d-4f20-b0e0-421bb0fb87bb) ![output_lane_det](https://github.com/user-attachments/assets/87ea6238-3ac0-42e2-984b-1c352218abe8)
 
+* **Steering/Navigation**
+
+    ![small_corr_w_obs_2](https://github.com/user-attachments/assets/106772e7-0e7d-499e-92df-e672af818192) ![output_steer](https://github.com/user-attachments/assets/e0590633-2a19-48d6-90ea-914ab9592596)
+
+
 
 
 

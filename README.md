@@ -1,4 +1,4 @@
-# Autonomous Warehouse Lane Follower & Obstacle Avoidance
+# Autonomous Lane Follower & Obstacle Avoidance
 
 This repository contains the **Brain Node**, a ROS-based controller for an NVIDIA Jetson Nano-powered JetBot. The system integrates real-time semantic segmentation for lane tracking and dynamic object detection to navigate warehouse environments autonomously.
 

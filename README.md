@@ -58,7 +58,12 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 
 * **Object detection**.
   
-![output_obj_det](https://github.com/user-attachments/assets/477efeed-4d03-4629-a01f-df98cb8a6762)
+    ![output_obj_det](https://github.com/user-attachments/assets/477efeed-4d03-4629-a01f-df98cb8a6762)
+
+* **Lane detection**
+
+    ![u_corr](https://github.com/user-attachments/assets/9fe2607e-0a1d-4f20-b0e0-421bb0fb87bb) ![output_lane_det](https://github.com/user-attachments/assets/87ea6238-3ac0-42e2-984b-1c352218abe8)
+
 
 
 

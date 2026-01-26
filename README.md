@@ -69,15 +69,6 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
     ![small_corr_w_obs_2](https://github.com/user-attachments/assets/106772e7-0e7d-499e-92df-e672af818192) ![output_steer](https://github.com/user-attachments/assets/e0590633-2a19-48d6-90ea-914ab9592596)
 
 
-
-
-
-| Scenario | Accuracy | Behavior |
-| :--- | :--- | :--- |
-| **Straight Tracking** | 85% | Maintains center-lane position with minimal oscillation. |
-| **Obstacle Avoidance** | 92% | Smoothly steers around boxes and returns to lane. |
-| **Lane Gaps** | 88% | Ray filtering handles small gaps in floor tape without losing heading. |
-
 ---
 
 ## ⚙️ Installation & Usage

@@ -57,6 +57,7 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 ### 2. Navigation Results
 
 * **Object detection**.
+  
 ![output_obj_det](https://github.com/user-attachments/assets/477efeed-4d03-4629-a01f-df98cb8a6762)
 
 

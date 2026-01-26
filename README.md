@@ -55,6 +55,12 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 * **End-to-End Latency:** < 60ms.
 
 ### 2. Navigation Results
+
+* **Object detection**
+![output_obj_det](https://github.com/user-attachments/assets/477efeed-4d03-4629-a01f-df98cb8a6762)
+
+
+
 | Scenario | Accuracy | Behavior |
 | :--- | :--- | :--- |
 | **Straight Tracking** | 85% | Maintains center-lane position with minimal oscillation. |

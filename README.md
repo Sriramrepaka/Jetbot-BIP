@@ -68,6 +68,11 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 
     ![small_corr_w_obs_2](https://github.com/user-attachments/assets/106772e7-0e7d-499e-92df-e672af818192) ![output_steer](https://github.com/user-attachments/assets/e0590633-2a19-48d6-90ea-914ab9592596)
 
+* **Result**
+
+    ![result_com_1](https://github.com/user-attachments/assets/ff83182d-1fed-439e-9549-823f2b337fc1)
+
+
 
 ---
 
@@ -95,11 +100,6 @@ Instead of traditional line-following, this node uses a sophisticated ray-castin
 ## ⚠️ Known Edge Cases
 * **Low Lighting:** High ISO noise can occasionally create false boundaries in the segmentation mask.
 * **Total Obstruction:** If the path is 100% blocked, the robot is programmed to maintain its last known valid heading at reduced speed.
----
-
-## Final Output
-
-    ![result_com](https://github.com/user-attachments/assets/81944fa1-b5ca-4e6f-b8b1-b0655069f8d5)
 
 
 
